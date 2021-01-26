@@ -12,4 +12,3 @@ output "project_workspaces" {
   value       = local.project_workspaces
   description = "A list of project workspaces & their configurations."
 }
-

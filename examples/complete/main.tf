@@ -2,14 +2,16 @@
 provider "tfe" {
   hostname = var.tfe_hostname
   token    = var.tfe_token
-  version  = ">= 0.23.0"
 }
 
 module "example" {
   source = "../../"
 
-  config_file_path = "config"
-  organization     = var.organization
+  # Uncomment this to use a specific agent pool
+  # agent_pool_id       = "ap-xxxyyyzzz"
+  config_file_path    = "./stacks"
+  config_file_pattern = "u*-testing.yaml"
+  organization        = var.organization
 
   vcs_repo = {
     branch             = var.branch

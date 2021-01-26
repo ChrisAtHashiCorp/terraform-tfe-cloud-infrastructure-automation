@@ -1,18 +1,45 @@
 locals {
   // Use the provided config file path or default to the current dir
   config_file_path = coalesce(var.config_file_path, path.cwd)
+
   // Result ex: [gbl-audit.yaml, gbl-auto.yaml, gbl-dev.yaml, ...]
   config_filenames = fileset(local.config_file_path, var.config_file_pattern)
-  // Result ex: [gbl-audit, gbl-auto, gbl-dev, ...]
-  config_files = { for f in local.config_filenames : trimsuffix(basename(f), ".yaml") => yamldecode(file("${local.config_file_path}/${f}")) }
-  // Result ex: { gbl-audit = { globals = { ... }, terraform = { project1 = { vars = ... }, project2 = { vars = ... } } } }
-  projects = { for f in keys(local.config_files) : f => lookup(local.config_files[f], "projects", {}) }
+}
+
+module "config_files" {
+  source = "cloudposse/stack-config/yaml"
+  # Cloud Posse recommends pinning every module to a specific version
+  version     = "0.5.0"
+
+  for_each = local.config_filenames
+
+  context = module.this.context
+
+  stack_config_local_path = local.config_file_path
+  stack                   = trimsuffix(basename(each.value), ".yaml")
+}
+
+output "config_files" {
+  value = local.config_files
+}
+
+locals {
+  // Result ex: TODO
+  config_files = { for f in keys(module.config_files) : trimsuffix(basename(f), ".yaml") => module.config_files[f] }
+  // Result ex: TODO
+  projects = {
+    for f in keys(local.config_files) : f => {
+      "components" = lookup(lookup(local.config_files[f].config, "components", {}), "terraform", {}),
+      "triggers"   = lookup(local.config_files[f], "all_imports_list", []),
+      "globals"    = lookup(lookup(local.config_files[f], "terraform", {}), "vars", {}),
+    }
+  }
 
   environment_workspaces = {
     for k, v in module.tfc_environment : k => {
       "workspace" = v.workspace,
       "projects" = [
-        for project_name, project_values in v.projects : project_name
+        for project_name, project_values in v : project_name
       ]
     }
   }
@@ -26,7 +53,7 @@ locals {
 
   custom_triggers = merge({}, flatten([
     for k, v in local.projects : [
-      for project, settings in v.terraform : {
+      for project, settings in v : {
         for trigger in(try(settings.triggers, null) != null ? settings.triggers : []) :
         "${k}-${project}-${trigger}" => {
           source      = trigger
@@ -58,10 +85,13 @@ module "tfc_environment" {
 
   for_each = local.projects
 
+  agent_pool_id     = var.agent_pool_id
+  config_directory  = local.config_file_path
   config_name       = each.key
-  global_values     = each.value.globals
+  filename_triggers = local.projects[each.key].triggers
+  global_values     = local.projects[each.key].globals
   terraform_version = var.terraform_version
-  projects          = local.projects[each.key].terraform
+  projects          = local.projects[each.key].components
   projects_path     = var.projects_path
   organization      = var.organization
   vcs_repo          = var.vcs_repo
