@@ -5,8 +5,6 @@ provider "tfe" {
 module "example" {
   source = "../../"
 
-  context = module.this.context
-
   config_file_path = "examples/complete/config"
   organization     = var.organization
 
