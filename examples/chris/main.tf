@@ -5,7 +5,9 @@ provider "tfe" {
 module "example" {
   source = "../../"
 
-  config_file_path = "examples/chris"
+  context = module.this.context
+
+  config_file_path = "examples/complete/config"
   organization     = var.organization
 
   vcs_repo = {
